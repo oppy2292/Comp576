@@ -1,5 +1,4 @@
 __author__ = 'Yashwanth Lagisetty'
-
 import numpy as np
 from sklearn import datasets
 import matplotlib.pyplot as plt
@@ -80,16 +79,18 @@ class Layer(object):
 
         # Perform Affine transformation first
         self.aff = np.dot(X,self.weights) + self.bias
-        self.act = actFun(self.aff,self.actFun_type)
+        self.act = self.actFun(self.aff,self.actFun_type)
 
         return self.act
 
     def backprop(self,X):
         """
         Computes backpropagation for layer
+        :return: ddx ddw, partials w.r.t input and weights
         """
-
-        
+        ddw = np.dot(self.diff_actFun(self.aff,self.actFun_type).T,X).T
+        ddx = np.dot(self.diff_actFun(self.aff,self.actFun_type),self.weights.T)
+        return ddx,ddw
 
 
 class DeepNeuralNetwork(object):
@@ -119,10 +120,49 @@ class DeepNeuralNetwork(object):
         n_all.append(self.output_dims)
 
         # Number of weight matrices needed is one less than number of TOTAL layers
-        num_W = len(n_all) - 1
+        self.num_W = len(n_all) - 1
         self.weights = {i:0 for i in range(num_W)}
         self.biases = {i:0 for i in range(num_W)}
-        for i in range(num_W):
+        for i in range(self.num_W):
             # To initialize W_l we initialize by dims of layer l (n_all[i]) and layer l+1 (n_all[i+1])
             self.weight[i] = np.random.randn(n_all[i],n_all[i+1]) / np.sqrt(n_all[i])
             self.bias[i] = np.zeros((1,n_all[i+1]))
+
+        # Initialize Layer objects for each hidden layer
+        self.layers = {}
+        for i in range(self.num_W-1):
+            self.layers[i] = Layer(weights=self.weights[i],bias=self.biases[i],actFun_type=self.actFun_type)
+
+    def feedforward(self,X):
+        """
+        Feedforward computes the forward pass through n-layer neural network
+        :param X: input data
+        :return: probabilities for class 0 and 1
+        """
+
+        # Compute layer 1 affine transformation and activation function
+        out = self.layers[0].feedforward(X)
+        for key in list(self.layers.keys())[1:]:
+            out = self.layers[key].feedforward(out)
+
+        # Compute softmax probabilities on output from last hidden layer
+        out = np.dot(out,self.weights[self.num_W-1])+self.biases[num_W-1]
+        self.probs = np.exp(out)/np.sum(np.exp(out),axis=1)[:,np.newaxis]
+
+        return self.probs
+
+    def calculate_loss(self,X,y):
+        """
+        Calculate the loss for prediction
+        :param X: input data
+        :param y: input data labels
+        :return: loss for prediction
+        """
+
+    def backprop(self,X,y):
+        """
+        Backprop calculates the backpropagation of error via gradients through all parameters of the network
+        :param X: input data
+        :param y: input data labels
+        :return: backprop errors
+        """
