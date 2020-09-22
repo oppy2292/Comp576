@@ -90,7 +90,8 @@ class Layer(object):
         """
         ddw = np.dot(self.diff_actFun(self.aff,self.actFun_type).T,X).T
         ddx = np.dot(self.diff_actFun(self.aff,self.actFun_type),self.weights.T)
-        return ddx,ddw
+        ddb = np.sum(self.diff_actFun(self.aff,self.actFun_type),axis=0)
+        return ddx,ddw,ddb
 
 
 class DeepNeuralNetwork(object):
@@ -98,13 +99,14 @@ class DeepNeuralNetwork(object):
     Neural network class
     """
 
-    def __init__(self, input_dims, n_units=3, output_dim, actFun_type='tanh', reg_lambda=0.01, seed=0):
+    def __init__(self, input_dims, n_units, output_dim, actFun_type='tanh', reg_lambda=0.01, epsilon = 0.01, seed=0):
         """
         :param input_dims: input dimension
         :param n_units: list of hidden units in each HIDDEN layer e.g. [3,4,5]
         :param output_dim: output dimensions
         :param actFun_type: type of activation function (tanh, sigmoid, ReLU)
         :param reg_lambda: regularization coefficient
+        :param epsilon: learning rate
         :param seed: random seed
         """
         self.input_dims = input_dims
@@ -112,6 +114,7 @@ class DeepNeuralNetwork(object):
         self.output_dims = output_dim
         self.actFun_type = actFun_type
         self.reg_lambda = reg_lambda
+        self.epsilon = epsilon
 
         # Initialize weights and biases for network
         # Expand units list to include input and output dims
@@ -125,13 +128,16 @@ class DeepNeuralNetwork(object):
         self.biases = {i:0 for i in range(num_W)}
         for i in range(self.num_W):
             # To initialize W_l we initialize by dims of layer l (n_all[i]) and layer l+1 (n_all[i+1])
-            self.weight[i] = np.random.randn(n_all[i],n_all[i+1]) / np.sqrt(n_all[i])
-            self.bias[i] = np.zeros((1,n_all[i+1]))
+            self.weights[i] = np.random.randn(n_all[i],n_all[i+1]) / np.sqrt(n_all[i])
+            self.biases[i] = np.zeros((1,n_all[i+1]))
 
         # Initialize Layer objects for each hidden layer
         self.layers = {}
         for i in range(self.num_W-1):
             self.layers[i] = Layer(weights=self.weights[i],bias=self.biases[i],actFun_type=self.actFun_type)
+
+        # Initialize dictionary to hold activations of each layer to be used in backprop later
+        self.act_cache = {i:0 for i in self.layers.keys()}
 
     def feedforward(self,X):
         """
@@ -141,12 +147,12 @@ class DeepNeuralNetwork(object):
         """
 
         # Compute layer 1 affine transformation and activation function
-        out = self.layers[0].feedforward(X)
+        self.act_cache[0] = self.layers[0].feedforward(X)
         for key in list(self.layers.keys())[1:]:
-            out = self.layers[key].feedforward(out)
+            self.act_cache[key] = self.layers[key].feedforward(self.act_cache[key-1])
 
         # Compute softmax probabilities on output from last hidden layer
-        out = np.dot(out,self.weights[self.num_W-1])+self.biases[num_W-1]
+        out = np.dot(self.act_cache[self.num_W-2],self.weights[self.num_W-1])+self.biases[num_W-1]
         self.probs = np.exp(out)/np.sum(np.exp(out),axis=1)[:,np.newaxis]
 
         return self.probs
@@ -158,11 +164,60 @@ class DeepNeuralNetwork(object):
         :param y: input data labels
         :return: loss for prediction
         """
+        num_samps = len(X)
+
+        data_loss = y * np.log(self.probs)
+        data_loss = np.sum(data_loss, axis=1)
+        data_loss = np.sum(data_loss)
+        data_loss = -1 * data_loss
+
+        sum_weights=0
+        for key in self.weights.keys():
+            w = np.sum(np.square(self.weights[key]))
+            sum_weights += w
+
+        data_loss += self.reg_lambda / 2 * sum_weights
+        return (1. / num_samps) * data_loss
 
     def backprop(self,X,y):
         """
         Backprop calculates the backpropagation of error via gradients through all parameters of the network
         :param X: input data
         :param y: input data labels
-        :return: backprop errors
+        :return:
         """
+
+        num_examples = len(X)
+        norm = -1/num_examples
+        del1 = y-self.probs
+
+        # Compute the back prop for the affine transformation closest to output
+        ddw = norm*np.dot(del1.T,self.act_cache[self.num_W-2]).T
+        ddw += self.reg_lambda*self.weights[self.num_W-1]
+        ddb = norm*np.sum(del1,axis=0)
+        ddx = norm*np.dot(del1,self.weights[self.num_W-1].T)
+
+        self.weights[self.num_W-1] += -self.epsilon * ddw
+        self.biases[self.num_W-1] += -self.epsilon * ddb
+
+        # Compute backprop for the rest of the layers
+        for i in reversed(range(self.num_W-1)):
+            ddx,ddw,ddb = self.layers[i].backprop(ddx)
+            ddw += self.reg_lambda*self.weights[i]
+
+            self.weights[i] += -self.epsilon * ddw
+            self.biases[i] += -self.epsilon * ddb
+
+    def fit_model(self, X, y, num_passes = 20000, print_loss = True):
+        """
+        fit_model uses forward pass and backwards pass to train the model
+        :param X: intput data
+        :param y: input data labels
+        :param num_passes: number of iterations
+        :param print_loss: Print loss output statement
+        """
+
+        for i in range(num_passes):
+            self.feedforward(X)
+            self.backprop(X,y)
+
