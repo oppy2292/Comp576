@@ -83,14 +83,18 @@ class Layer(object):
 
         return self.act
 
-    def backprop(self,X):
+    def backprop(self,act_prev,ddx_prev):
         """
         Computes backpropagation for layer
+        :param act_prev: if current layer l, act_prev is output of layer l-1
+        :param ddx_prev: if current layer l, ddx_prev is ddx of layer l+1
         :return: ddx ddw, partials w.r.t input and weights
         """
-        ddw = np.dot(self.diff_actFun(self.aff,self.actFun_type).T,X).T
-        ddx = np.dot(self.diff_actFun(self.aff,self.actFun_type),self.weights.T)
-        ddb = np.sum(self.diff_actFun(self.aff,self.actFun_type),axis=0)
+        del1 = ddx_prev * self.diff_actFun(self.aff,self.actFun_type)
+
+        ddw = np.dot(del1.T,act_prev).T
+        ddx = np.dot(del1,self.weights.T)
+        ddb = np.sum(del1,axis=0)
         return ddx,ddw,ddb
 
 
