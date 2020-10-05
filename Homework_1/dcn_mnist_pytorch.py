@@ -53,24 +53,39 @@ class DCN(nn.Module):
         # conv1(5-5-1-32) -> ReLU -> maxpool(2-2) -> conv2(5-5-32-64) -> ReLU -> maxpool(2-2)
         # -> FC(1024) -> ReLU -> Dropout(0.5) -> softmax(10)
 
-        # Initialize the operation and weights, biases
-        # Weights and biases can be easily altered by using a different torch.nn.init method, e.g. torch.nn.init.normal_()
+        # Initialize the operation and weights, biases Weights and biases can be easily altered by using a different
+        # torch.nn.init method, e.g. torch.nn.init.normal_() Alternatively, custom initialization can be performed by
+        # setting self.conv1.weight and self.conv1.bias equal to some tensor object.
+        # e.g. self.conv1.weight = torch.nn.Parameter(torch.randn(self.conv1.weight.shape))
+
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5)
         torch.nn.init.kaiming_normal_(self.conv1.weight)
         torch.nn.init.constant_(self.conv1.bias, val=0.1)
+        # If customized initialization is desired, uncomment and edit following lines:
+        # self.conv1.weight = nn.Parameter(torch.randn(self.conv1.weight.shape))
+        # self.conv1.bias = nn.Parameter(torch.ones(self.conv1.bias.shape)*0.1)
 
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5)
         torch.nn.init.kaiming_normal_(self.conv2.weight)
         torch.nn.init.constant_(self.conv2.bias, val=0.1)
+        # If customized initialization is desired, uncomment and edit following lines:
+        # self.conv2.weight = nn.Parameter(torch.randn(self.conv2.weight.shape))
+        # self.conv2.bias = nn.Parameter(torch.ones(self.conv2.bias.shape)*0.1)
 
         self.FC1 = nn.Linear(in_features=64 * 4 * 4, out_features=1024)
         torch.nn.init.kaiming_normal_(self.FC1.weight)
         torch.nn.init.constant_(self.FC1.bias, val=0.1)
+        # If customized initialization is desired, uncomment and edit following lines:
+        # self.FC1.weight = nn.Parameter(torch.randn(self.FC1.weight.shape))
+        # self.FC1.bias = nn.Parameter(torch.ones(self.FC1.bias.shape)*0.1)
 
         self.drop = nn.Dropout(p=0.5)
         self.FC2 = nn.Linear(in_features=1024, out_features=10)
         torch.nn.init.kaiming_normal_(self.FC2.weight)
         torch.nn.init.constant_(self.FC2.bias, val=0.1)
+        # If customized initialization is desired, uncomment and edit following lines:
+        # self.FC2.weight = nn.Parameter(torch.randn(self.FC2.weight.shape))
+        # self.FC2.bias = nn.Parameter(torch.ones(self.FC2.bias.shape)*0.1)
 
     def forward(self, x):
         """
